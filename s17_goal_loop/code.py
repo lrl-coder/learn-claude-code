@@ -40,6 +40,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from bash_compat import bash_argv
+
 DEFAULT_MAX_TOKENS = 8000
 DEFAULT_EVALUATOR_MAX_TOKENS = 512
 DEFAULT_STOP_HOOK_BLOCK_CAP = 8
@@ -767,8 +770,9 @@ class AgentSession:
         if name == "bash":
             command = str(arguments["command"])
             result = subprocess.run(
-                command,
-                shell=True,
+                bash_argv(command),
+                shell=False,
+                stdin=subprocess.DEVNULL,
                 cwd=self.workdir,
                 capture_output=True,
                 text=True, errors="replace",

@@ -42,6 +42,7 @@ except ImportError:
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from bash_compat import bash_argv
 from openai_compat import OpenAICompat
 from dotenv import load_dotenv
 
@@ -277,8 +278,9 @@ def complete_task(task_id: str, owner: str = "agent") -> str:
 def run_bash(command: str) -> str:
     try:
         result = subprocess.run(
-            command,
-            shell=True,
+            bash_argv(command),
+            shell=False,
+            stdin=subprocess.DEVNULL,
             cwd=WORKDIR,
             capture_output=True,
             text=True, errors="replace",

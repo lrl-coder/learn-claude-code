@@ -7,9 +7,21 @@ Each tool needs:
 """
 
 from pathlib import Path
+import os
+import shutil
 import subprocess
 
 WORKDIR = Path.cwd()
+
+
+def bash_argv(command: str) -> list[str]:
+    bash = os.getenv("BASH_PATH") or shutil.which("bash")
+    if not bash and os.name == "nt":
+        candidate = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git" / "bin" / "bash.exe"
+        bash = str(candidate) if candidate.is_file() else None
+    if not bash:
+        raise FileNotFoundError("Bash not found. Install Git Bash or set BASH_PATH.")
+    return [bash, "-lc", command]
 
 
 # =============================================================================
@@ -164,8 +176,9 @@ def run_bash(command: str) -> str:
 
     try:
         result = subprocess.run(
-            command,
-            shell=True,
+            bash_argv(command),
+            shell=False,
+            stdin=subprocess.DEVNULL,
             cwd=WORKDIR,
             capture_output=True,
             text=True, errors="replace",

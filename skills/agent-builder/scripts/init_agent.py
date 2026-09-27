@@ -28,7 +28,9 @@ Subagents via self-recursion: python {name}.py "subtask"
 
 from openai import OpenAI
 from dotenv import load_dotenv
+from pathlib import Path
 import json
+import shutil
 import subprocess
 import os
 
@@ -53,6 +55,15 @@ TOOL = [{{
     "parameters": {{"type": "object", "properties": {{"command": {{"type": "string"}}}}, "required": ["command"]}}
 }}]
 
+def bash_argv(command: str) -> list[str]:
+    bash = os.getenv("BASH_PATH") or shutil.which("bash")
+    if not bash and os.name == "nt":
+        candidate = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git" / "bin" / "bash.exe"
+        bash = str(candidate) if candidate.is_file() else None
+    if not bash:
+        raise FileNotFoundError("Bash not found. Install Git Bash or set BASH_PATH.")
+    return [bash, "-lc", command]
+
 def run(prompt, history=[]):
     history.append({{"role": "user", "content": prompt}})
     while True:
@@ -65,7 +76,7 @@ def run(prompt, history=[]):
             command = json.loads(call.arguments)["command"]
             print(f"> {{command}}")
             try:
-                out = subprocess.run(command, shell=True, capture_output=True, text=True, errors="replace", timeout=60)
+                out = subprocess.run(bash_argv(command), shell=False, stdin=subprocess.DEVNULL, capture_output=True, text=True, errors="replace", timeout=60)
                 output = (out.stdout + out.stderr).strip() or "(empty)"
             except Exception as e:
                 output = f"Error: {{e}}"
@@ -90,6 +101,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 import json
+import shutil
 import subprocess
 import os
 
@@ -121,6 +133,15 @@ TOOLS = [
      "parameters": {{"type": "object", "properties": {{"path": {{"type": "string"}}, "old_text": {{"type": "string"}}, "new_text": {{"type": "string"}}}}, "required": ["path", "old_text", "new_text"]}}}},
 ]
 
+def bash_argv(command: str) -> list[str]:
+    bash = os.getenv("BASH_PATH") or shutil.which("bash")
+    if not bash and os.name == "nt":
+        candidate = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git" / "bin" / "bash.exe"
+        bash = str(candidate) if candidate.is_file() else None
+    if not bash:
+        raise FileNotFoundError("Bash not found. Install Git Bash or set BASH_PATH.")
+    return [bash, "-lc", command]
+
 def safe_path(p: str) -> Path:
     """Prevent path escape attacks."""
     path = (WORKDIR / p).resolve()
@@ -135,7 +156,7 @@ def execute(name: str, args: dict) -> str:
         if any(d in args["command"] for d in dangerous):
             return "Error: Dangerous command blocked"
         try:
-            r = subprocess.run(args["command"], shell=True, cwd=WORKDIR, capture_output=True, text=True, errors="replace", timeout=60)
+            r = subprocess.run(bash_argv(args["command"]), shell=False, stdin=subprocess.DEVNULL, cwd=WORKDIR, capture_output=True, text=True, errors="replace", timeout=60)
             return (r.stdout + r.stderr).strip()[:50000] or "(empty)"
         except subprocess.TimeoutExpired:
             return "Error: Timeout (60s)"

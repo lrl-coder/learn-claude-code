@@ -63,6 +63,7 @@ except ImportError:
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from bash_compat import bash_argv
 from openai_compat import OpenAICompat
 from dotenv import load_dotenv
 
@@ -312,7 +313,8 @@ def _run_bash(command: str) -> str:
         return "Error: Dangerous command blocked"
     try:
         r = subprocess.run(
-            command, shell=True, cwd=WORKDIR,
+            bash_argv(command), shell=False, stdin=subprocess.DEVNULL,
+            cwd=WORKDIR,
             capture_output=True, text=True, errors="replace", timeout=120,
         )
         out = (r.stdout + r.stderr).strip()

@@ -23,8 +23,8 @@ SOURCE_FILES = tuple(sorted({
 
 def child_command(expression: str, stream: str = "stdout") -> str:
     script = f"import sys; sys.{stream}.buffer.write({expression})"
-    args = [sys.executable, "-c", script]
-    return subprocess.list2cmdline(args) if os.name == "nt" else shlex.join(args)
+    executable = Path(sys.executable).as_posix()
+    return shlex.join([executable, "-c", script])
 
 
 @pytest.mark.parametrize(

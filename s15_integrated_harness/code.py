@@ -46,6 +46,7 @@ except ImportError:
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from bash_compat import bash_argv
 from openai_compat import OpenAICompat
 from dotenv import load_dotenv
 
@@ -870,6 +871,10 @@ _shell_process_lock = threading.RLock()
 
 def _stop_process_group(process: subprocess.Popen):
     """Stop processes that remain in the command's original process group."""
+    if os.name == "nt":
+        if process.poll() is None:
+            process.terminate()
+        return
     for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
             os.killpg(process.pid, sig)
@@ -900,7 +905,8 @@ def _run_bash_process(command: str, cwd: Path | None = None) -> tuple[str, int |
     process = None
     try:
         process = subprocess.Popen(
-            command, shell=True, cwd=cwd or WORKDIR,
+            bash_argv(command), shell=False, stdin=subprocess.DEVNULL,
+            cwd=cwd or WORKDIR,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, errors="replace", start_new_session=True,
         )

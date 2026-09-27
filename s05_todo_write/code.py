@@ -37,6 +37,7 @@ except ImportError:
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from bash_compat import bash_argv
 from openai_compat import OpenAICompat
 from dotenv import load_dotenv
 
@@ -57,7 +58,8 @@ SYSTEM = (
 
 def run_bash(command: str) -> str:
     try:
-        r = subprocess.run(command, shell=True, cwd=WORKDIR,
+        r = subprocess.run(bash_argv(command), shell=False,
+                           stdin=subprocess.DEVNULL, cwd=WORKDIR,
                            capture_output=True, text=True, errors="replace", timeout=120)
         out = (r.stdout + r.stderr).strip()
         return out[:50000] if out else "(no output)"

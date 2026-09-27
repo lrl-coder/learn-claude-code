@@ -14,6 +14,7 @@ Usage:
 from openai import OpenAI
 from pathlib import Path
 import json
+import shutil
 import subprocess
 import os
 
@@ -68,12 +69,23 @@ TOOLS = [
 ]
 
 
+def bash_argv(command: str) -> list[str]:
+    bash = os.getenv("BASH_PATH") or shutil.which("bash")
+    if not bash and os.name == "nt":
+        candidate = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git" / "bin" / "bash.exe"
+        bash = str(candidate) if candidate.is_file() else None
+    if not bash:
+        raise FileNotFoundError("Bash not found. Install Git Bash or set BASH_PATH.")
+    return [bash, "-lc", command]
+
+
 def execute_tool(name: str, args: dict) -> str:
     """Execute a tool and return result."""
     if name == "bash":
         try:
             r = subprocess.run(
-                args["command"], shell=True, cwd=WORKDIR,
+                bash_argv(args["command"]), shell=False,
+                stdin=subprocess.DEVNULL, cwd=WORKDIR,
                 capture_output=True, text=True, errors="replace", timeout=60
             )
             return (r.stdout + r.stderr).strip() or "(empty)"
