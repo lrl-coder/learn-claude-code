@@ -107,7 +107,7 @@ Claude Code = 一个 agent loop
             + MCP 外部能力路由
 ```
 
-就这些。这就是全部架构。每一个组件都是 harness 机制 -- 为 agent 构建的栖居世界的一部分。Agent 本身呢？是 Claude。一个模型。由 Anthropic 在人类推理和代码的全部广度上训练而成。Harness 没有让 Claude 变聪明。Claude 本来就聪明。Harness 给了 Claude 双手、双眼和一个工作空间。
+就这些。这就是全部架构。每一个组件都是 harness 机制 -- 为 agent 构建的栖居世界的一部分。Agent 本身是 `MODEL_ID` 选定的模型；在这个版本里，它是 OpenAI 模型。Harness 不负责创造模型的智能，而是给模型双手、双眼和一个工作空间。
 
 这就是 Claude Code 作为教学标本的意义：**它展示了当你信任模型、把工程精力集中在 harness 上时会发生什么。** 本仓库的课程（s01-s17）逐步拆解并重组 harness 机制。学完之后，你理解的不只是一个 coding agent 怎么工作，而是适用于不同领域的 harness 工程原则。
 
@@ -273,12 +273,16 @@ def agent_loop(messages):
 git clone https://github.com/shareAI-lab/learn-claude-code
 cd learn-claude-code
 pip install -r requirements.txt
-cp .env.example .env   # 编辑 .env 填入你的 ANTHROPIC_API_KEY
+cp .env.example .env   # 编辑 .env 填入你的 OPENAI_API_KEY
 
 python s01_agent_loop/code.py        # 起点 — 一个循环 + bash
 python s08_context_compact/code.py    # 上下文压缩（复杂章）
 python s17_goal_loop/code.py          # 终点章：用目标闭合循环
 ```
+
+运行时使用 OpenAI 官方 Python SDK 和 Responses API。轻量的
+[`openai_compat.py`](./openai_compat.py) 适配层保留课程中的
+`tool_use` / `tool_result` 教学写法，并将其转换为 OpenAI 函数调用。
 
 ### 旧版 12 章过渡线
 

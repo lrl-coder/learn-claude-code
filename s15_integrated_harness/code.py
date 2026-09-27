@@ -3,7 +3,7 @@
 s15: Integrated Harness - combine the course mechanisms in one runtime.
 
 Run:  python s15_integrated_harness/code.py
-Need: pip install anthropic python-dotenv pyyaml + .env with ANTHROPIC_API_KEY
+Need: pip install openai python-dotenv pyyaml + .env with OPENAI_API_KEY
 
     scheduled work ----+                    +---- team events
                        v                    v
@@ -44,15 +44,14 @@ try:
 except ImportError:
     READLINE_AVAILABLE = False
 
-from anthropic import Anthropic
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from openai_compat import OpenAICompat
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
-if os.getenv("ANTHROPIC_BASE_URL"):
-    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
-
 WORKDIR = Path.cwd()
-client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
+client = OpenAICompat(base_url=os.getenv("OPENAI_BASE_URL"))
 MODEL = os.environ["MODEL_ID"]
 PRIMARY_MODEL = MODEL
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL_ID")

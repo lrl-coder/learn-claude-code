@@ -3,7 +3,7 @@
 s13: Agent Teams - persistent teammates with shared tasks and mailboxes.
 
 Run:  python s13_agent_teams/code.py
-Need: pip install anthropic python-dotenv + .env with ANTHROPIC_API_KEY
+Need: pip install openai python-dotenv + .env with OPENAI_API_KEY
 
     +------+  spawn(task_id)  +----------+  result  +------+
     | Lead | ---------------> |   WORK   | -------> | IDLE |
@@ -41,15 +41,14 @@ try:
 except ImportError:
     pass
 
-from anthropic import Anthropic
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from openai_compat import OpenAICompat
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
-if os.getenv("ANTHROPIC_BASE_URL"):
-    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
-
 WORKDIR = Path.cwd()
-client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
+client = OpenAICompat(base_url=os.getenv("OPENAI_BASE_URL"))
 MODEL = os.environ["MODEL_ID"]
 
 # -- Task System --

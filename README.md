@@ -103,7 +103,7 @@ Claude Code = one agent loop
             + MCP external capability routing
 ```
 
-That is it. The agent itself? Claude. A model. Trained by Anthropic on the full breadth of human reasoning and code. The harness did not make Claude smart. Claude was already smart. The harness gave Claude hands, eyes, and a workspace.
+That is it. The agent itself is the model selected by `MODEL_ID`—in this version, an OpenAI model. The harness did not create the model's intelligence; it gives the model hands, eyes, and a workspace.
 
 The takeaway is not "copy Claude Code." The takeaway is: **the best agent products come from engineers who understand that their job is the harness, not the intelligence.**
 
@@ -349,12 +349,17 @@ Read from s01 through s17 in order. Some mechanisms build directly on the previo
 git clone https://github.com/shareAI-lab/learn-claude-code
 cd learn-claude-code
 pip install -r requirements.txt
-cp .env.example .env   # configure ANTHROPIC_API_KEY
+cp .env.example .env   # configure OPENAI_API_KEY
 
 python s01_agent_loop/code.py        # Start here -- one loop + bash
 python s08_context_compact/code.py   # Context compaction (complex)
 python s17_goal_loop/code.py         # Endpoint: continue until a checkable goal is met
 ```
+
+The runtime uses the official OpenAI Python SDK and Responses API. The small
+[`openai_compat.py`](./openai_compat.py) adapter preserves the course's
+`tool_use` / `tool_result` teaching notation while translating it to OpenAI
+function calls.
 
 ### Legacy 12-Lesson Track
 

@@ -11,7 +11,7 @@ Run:
   python s17_goal_loop/code.py
   python s17_goal_loop/code.py "/goal pytest tests exits with code 0"
 
-The live path uses the Anthropic API for both the worker and the evaluator.
+The live path uses the OpenAI API for both the worker and the evaluator.
 Test doubles belong in tests only.
 
     +------------+     +--------------+     +-------------+
@@ -823,7 +823,10 @@ class AgentSession:
 
 def make_live_session(workdir: Path) -> AgentSession:
     try:
-        from anthropic import Anthropic
+        sys.path.insert(
+            0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        from openai_compat import OpenAICompat
         from dotenv import load_dotenv
     except ImportError as error:
         raise GoalError(
@@ -836,12 +839,9 @@ def make_live_session(workdir: Path) -> AgentSession:
         raise GoalError("MODEL_ID is required in the environment or .env")
     evaluator_model = (
         os.getenv("GOAL_EVALUATOR_MODEL_ID")
-        or os.getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")
         or model
     )
-    if os.getenv("ANTHROPIC_BASE_URL"):
-        os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
-    client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
+    client = OpenAICompat(base_url=os.getenv("OPENAI_BASE_URL"))
     evaluator = PromptGoalEvaluator(client=client, model=evaluator_model)
     block_cap = int(
         os.getenv(

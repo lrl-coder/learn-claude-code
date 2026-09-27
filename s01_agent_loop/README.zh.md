@@ -126,7 +126,7 @@ def agent_loop(messages):
 ```sh
 pip install -r requirements.txt
 cp .env.example .env
-# 编辑 .env，填入 ANTHROPIC_API_KEY 和 MODEL_ID
+# 编辑 .env，填入 OPENAI_API_KEY 和 MODEL_ID
 ```
 
 **运行**：

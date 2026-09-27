@@ -126,7 +126,7 @@ Just over 30 lines — that's the minimal runnable agent harness kernel. It's no
 ```sh
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env, fill in ANTHROPIC_API_KEY and MODEL_ID
+# Edit .env, fill in OPENAI_API_KEY and MODEL_ID
 ```
 
 **Run**:

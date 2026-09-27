@@ -6,19 +6,20 @@ This is the simplest possible working agent (~80 lines).
 It has everything you need: 3 tools + loop.
 
 Usage:
-    1. Set ANTHROPIC_API_KEY environment variable
+    1. Set OPENAI_API_KEY environment variable
     2. python minimal-agent.py
     3. Type commands, 'q' to quit
 """
 
-from anthropic import Anthropic
+from openai import OpenAI
 from pathlib import Path
+import json
 import subprocess
 import os
 
 # Configuration
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-MODEL = os.getenv("MODEL_NAME", "claude-sonnet-4-20250514")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+MODEL = os.getenv("MODEL_NAME", "gpt-6-astra")
 WORKDIR = Path.cwd()
 
 # System prompt - keep it simple
@@ -32,27 +33,30 @@ Rules:
 # Minimal tool set - add more as needed
 TOOLS = [
     {
+        "type": "function",
         "name": "bash",
         "description": "Run shell command",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"command": {"type": "string"}},
             "required": ["command"]
         }
     },
     {
+        "type": "function",
         "name": "read_file",
         "description": "Read file contents",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"path": {"type": "string"}},
             "required": ["path"]
         }
     },
     {
+        "type": "function",
         "name": "write_file",
         "description": "Write content to file",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "path": {"type": "string"},
@@ -102,35 +106,31 @@ def agent(prompt: str, history: list = None) -> str:
     history.append({"role": "user", "content": prompt})
 
     while True:
-        response = client.messages.create(
+        response = client.responses.create(
             model=MODEL,
-            system=SYSTEM,
-            messages=history,
+            instructions=SYSTEM,
+            input=history,
             tools=TOOLS,
-            max_tokens=8000,
+            max_output_tokens=8000,
         )
 
-        # Build assistant message
-        history.append({"role": "assistant", "content": response.content})
-
-        # If no tool calls, return text
-        if response.stop_reason != "tool_use":
-            return "".join(b.text for b in response.content if hasattr(b, "text"))
+        history.extend(response.output)
+        tool_calls = [item for item in response.output
+                      if item.type == "function_call"]
+        if not tool_calls:
+            return response.output_text
 
         # Execute tools
-        results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                print(f"> {block.name}: {block.input}")
-                output = execute_tool(block.name, block.input)
-                print(f"  {output[:100]}...")
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": output
-                })
-
-        history.append({"role": "user", "content": results})
+        for call in tool_calls:
+            arguments = json.loads(call.arguments)
+            print(f"> {call.name}: {arguments}")
+            output = execute_tool(call.name, arguments)
+            print(f"  {output[:100]}...")
+            history.append({
+                "type": "function_call_output",
+                "call_id": call.call_id,
+                "output": output,
+            })
 
 
 if __name__ == "__main__":

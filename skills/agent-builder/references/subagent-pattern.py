@@ -131,7 +131,7 @@ def run_task(description: str, prompt: str, agent_type: str,
         description: Short name for progress display
         prompt: Detailed instructions for subagent
         agent_type: Key from AGENT_TYPES
-        client: Anthropic client
+        client: Course LLM client backed by the OpenAI SDK
         model: Model to use
         workdir: Working directory
         base_tools: List of tool definitions

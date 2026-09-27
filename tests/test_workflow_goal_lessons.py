@@ -320,7 +320,7 @@ def test_workflow_tool_extends_the_integrated_host_pool() -> None:
     assert handlers["Workflow"] is workflow.run_workflow_sync
 
 
-def test_anthropic_runner_parses_json_and_records_real_usage() -> None:
+def test_openai_runner_parses_json_and_records_real_usage() -> None:
     workflow = load_lesson(
         "workflow_real_runner_test", ROOT / "s16_workflow_runtime" / "code.py"
     )
@@ -338,7 +338,7 @@ def test_anthropic_runner_parses_json_and_records_real_usage() -> None:
     client = types.SimpleNamespace(
         messages=types.SimpleNamespace(create=create)
     )
-    runner = workflow.AnthropicAgentRunner(client, "deepseek-v4-flash")
+    runner = workflow.OpenAIAgentRunner(client, "deepseek-v4-flash")
 
     result = runner.run(
         "Check the supplied change.",
@@ -378,7 +378,7 @@ def test_real_runner_output_retries_once_after_invalid_json(
     client = types.SimpleNamespace(
         messages=types.SimpleNamespace(create=lambda **_kwargs: next(responses))
     )
-    runner = workflow.AnthropicAgentRunner(client, "test-model")
+    runner = workflow.OpenAIAgentRunner(client, "test-model")
     journal = workflow.WorkflowJournal(
         "wf_json-retry_0001", resume=False, store=tmp_path
     )
@@ -419,7 +419,7 @@ def test_install_workflow_tool_selects_the_host_api_runner() -> None:
     workflow.install_workflow_tool(host)
     runner = workflow.RUNNER_FACTORY()
 
-    assert isinstance(runner, workflow.AnthropicAgentRunner)
+    assert isinstance(runner, workflow.OpenAIAgentRunner)
     assert runner.client is client
     assert runner.model == "deepseek-v4-flash"
 

@@ -16,7 +16,9 @@ import subprocess
 from pathlib import Path
 
 import yaml
-from anthropic import Anthropic
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from openai_compat import OpenAICompat
 from dotenv import load_dotenv
 
 try:
@@ -30,13 +32,10 @@ except ImportError:
     pass
 
 load_dotenv(override=True)
-if os.getenv("ANTHROPIC_BASE_URL"):
-    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
-
 WORKDIR = Path.cwd()
 MEMORY_DIR = WORKDIR / ".memory"
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
-client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
+client = OpenAICompat(base_url=os.getenv("OPENAI_BASE_URL"))
 MODEL = os.environ["MODEL_ID"]
 
 # -- Memory store --

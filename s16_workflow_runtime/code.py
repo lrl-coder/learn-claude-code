@@ -274,7 +274,7 @@ def _parse_runner_json(text: str) -> object:
         raise WorkflowInputError("workflow agent returned invalid JSON")
 
 
-class AnthropicAgentRunner:
+class OpenAIAgentRunner:
     """Run workflow agents through the same API client as the host."""
 
     def __init__(self, client, model):
@@ -778,7 +778,7 @@ def run_workflow_sync(**tool_input):
 def install_workflow_tool(host):
     """Extend the s15 host tool pool without changing its dispatch loop."""
     global RUNNER_FACTORY
-    RUNNER_FACTORY = lambda: AnthropicAgentRunner(host.client, host.MODEL)
+    RUNNER_FACTORY = lambda: OpenAIAgentRunner(host.client, host.MODEL)
     if getattr(host, "_workflow_tool_installed", False):
         return
     base_assemble = host.assemble_tool_pool

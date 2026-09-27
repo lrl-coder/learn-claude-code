@@ -104,7 +104,7 @@ Claude Code = 一つの agent loop
             + 権限ガバナンス
 ```
 
-これがすべてだ。これが全アーキテクチャ。すべてのコンポーネントは Harness メカニズム -- Agent が住む世界の一部。Agent そのものは？ Claude だ。モデル。Anthropic が人類の推論とコードの全幅で訓練した。Harness が Claude を賢くしたのではない。Claude は元々賢い。Harness が Claude に手と目とワークスペースを与えた。
+これがすべてだ。これが全アーキテクチャ。すべてのコンポーネントは Harness メカニズム -- Agent が住む世界の一部。Agent そのものは `MODEL_ID` で選んだモデルであり、この版では OpenAI モデルを使う。Harness はモデルの知能を作るのではなく、手と目とワークスペースを与える。
 
 これが Claude Code を教材として扱う理由だ：**モデルを信頼し、工学的努力を Harness に集中させるとどうなるかを示している。** このリポジトリの各セッション（s01-s17）は Harness メカニズムを段階的に分解し、最後に組み直す。終了時には、一つの coding agent の仕組みだけでなく、さまざまな領域に適用できる Harness 工学の原則を理解できる。
 
@@ -270,12 +270,16 @@ def agent_loop(messages):
 git clone https://github.com/shareAI-lab/learn-claude-code
 cd learn-claude-code
 pip install -r requirements.txt
-cp .env.example .env   # .env を編集して ANTHROPIC_API_KEY を入力
+cp .env.example .env   # .env を編集して OPENAI_API_KEY を入力
 
 python s01_agent_loop/code.py        # ここから開始 — 1ループ + bash
 python s08_context_compact/code.py    # コンテキスト圧縮（複雑章）
 python s17_goal_loop/code.py          # 終点: 目標でループを閉じる
 ```
+
+ランタイムは OpenAI 公式 Python SDK と Responses API を使用します。
+軽量な [`openai_compat.py`](./openai_compat.py) アダプターが、教材内の
+`tool_use` / `tool_result` 表記を OpenAI の関数呼び出しへ変換します。
 
 ### 旧 12 セッション移行版
 

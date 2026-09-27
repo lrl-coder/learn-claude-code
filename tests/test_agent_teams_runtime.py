@@ -466,7 +466,7 @@ class AgentTeamsRuntimeTests(unittest.TestCase):
                         "sys.modules.update({'anthropic': fake_anthropic, "
                         "'dotenv': fake_dotenv, 'yaml': fake_yaml})\n"
                         f"os.environ['MODEL_ID'] = 'test-model'\n"
-                        f"os.environ['ANTHROPIC_API_KEY'] = 'test-key'\n"
+                        f"os.environ['OPENAI_API_KEY'] = 'test-key'\n"
                         f"spec = importlib.util.spec_from_file_location('lesson', {str(lesson_path)!r})\n"
                         "lesson = importlib.util.module_from_spec(spec)\n"
                         "spec.loader.exec_module(lesson)\n"

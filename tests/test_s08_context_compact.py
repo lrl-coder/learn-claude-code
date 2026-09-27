@@ -21,7 +21,7 @@ def load_lesson(monkeypatch, workdir: Path):
     monkeypatch.setitem(sys.modules, "anthropic", fake_anthropic)
     monkeypatch.setitem(sys.modules, "dotenv", fake_dotenv)
     monkeypatch.setenv("MODEL_ID", "test-model")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.chdir(workdir)
     return runpy.run_path(str(LESSON))
 

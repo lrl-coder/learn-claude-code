@@ -29,7 +29,7 @@ def load_module(name: str, path: Path, temp_cwd: Path):
     previous_dotenv = sys.modules.get("dotenv")
     previous_cwd = Path.cwd()
     previous_model = os.environ.get("MODEL_ID")
-    previous_key = os.environ.get("ANTHROPIC_API_KEY")
+    previous_key = os.environ.get("OPENAI_API_KEY")
 
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -39,7 +39,7 @@ def load_module(name: str, path: Path, temp_cwd: Path):
     sys.modules["anthropic"] = fake_anthropic
     sys.modules["dotenv"] = fake_dotenv
     os.environ["MODEL_ID"] = "test-model"
-    os.environ["ANTHROPIC_API_KEY"] = "test-key"
+    os.environ["OPENAI_API_KEY"] = "test-key"
     try:
         os.chdir(temp_cwd)
         spec.loader.exec_module(module)
@@ -59,9 +59,9 @@ def load_module(name: str, path: Path, temp_cwd: Path):
         else:
             os.environ["MODEL_ID"] = previous_model
         if previous_key is None:
-            os.environ.pop("ANTHROPIC_API_KEY", None)
+            os.environ.pop("OPENAI_API_KEY", None)
         else:
-            os.environ["ANTHROPIC_API_KEY"] = previous_key
+            os.environ["OPENAI_API_KEY"] = previous_key
 
 
 def assistant_text():
