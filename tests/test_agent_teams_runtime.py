@@ -1,6 +1,8 @@
 import importlib.util
+import io
 import multiprocessing
 import os
+import queue
 import shlex
 import subprocess
 import sys
@@ -131,6 +133,55 @@ def update_in_child(lesson_path: str, root: str, task_id: str,
 
 
 class AgentTeamsRuntimeTests(unittest.TestCase):
+    def test_s13_worktree_tool_schema_avoids_unsupported_lookaround(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lesson = load_lesson(Path(tmp))
+            tool = next(tool for tool in lesson.TOOLS
+                        if tool["name"] == "create_worktree")
+            pattern = tool["input_schema"]["properties"]["name"]["pattern"]
+            self.assertNotIn("(?", pattern)
+            self.assertIsNone(lesson.validate_worktree_name("isolated"))
+            self.assertIsNotNone(lesson.validate_worktree_name("a..b"))
+
+    def test_s13_cli_input_and_team_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lesson = load_lesson(Path(tmp))
+            lines = queue.Queue()
+            with patch.object(lesson.sys, "stdin", io.StringIO("hello\n")):
+                lesson.read_cli_input(lines)
+
+            self.assertEqual(lesson.wait_for_cli_event(lines), ("user", "hello"))
+            lesson.BUS.send("alice", "lead", "Done", "result")
+            self.assertEqual(lesson.wait_for_cli_event(lines), ("wake", None))
+            self.assertEqual(lesson.consume_lead_inbox()[0]["content"], "Done")
+            self.assertEqual(lesson.wait_for_cli_event(lines), ("quit", None))
+
+    def test_s13_task_claim_is_atomic_across_processes(self):
+        context = multiprocessing.get_context("spawn")
+        with tempfile.TemporaryDirectory() as tmp:
+            lesson = load_lesson(Path(tmp))
+            task = lesson.create_task("Only once")
+            barrier = context.Barrier(3)
+            results = context.Queue()
+            workers = [
+                context.Process(
+                    target=claim_in_child,
+                    args=(str(LESSON), tmp, task.id, owner, barrier, results),
+                )
+                for owner in ("alice", "bob")
+            ]
+            for worker in workers:
+                worker.start()
+            barrier.wait()
+            for worker in workers:
+                worker.join(5)
+                self.assertEqual(worker.exitcode, 0)
+            outcomes = [results.get(timeout=1) for _ in workers]
+            self.assertEqual(
+                sum(outcome.startswith("Claimed ") for outcome in outcomes), 1
+            )
+            self.assertEqual(lesson.load_task(task.id).status, "in_progress")
+
     def test_downstream_lessons_execute_the_merged_runtime_contract(self):
         for lesson_path in RUNTIME_LESSONS:
             with self.subTest(lesson=lesson_path.parent.name):

@@ -417,25 +417,102 @@ Lead：我已收到认证任务的结果，接下来继续协调其余工作。
 
 ## 试一下
 
-```sh
-cd learn-claude-code
-python s13_agent_teams/code.py
+下面三个例子依次观察队友生命周期、共享任务认领、计划审批与 worktree。它们会调用配置的模型，因此运行前要在项目根目录的 `.env` 配置 `OPENAI_API_KEY` 和 `MODEL_ID`。Windows 上的 `bash` 工具需要 Git Bash；找不到时可把 `BASH_PATH` 设为 `bash.exe` 的完整路径。
+
+### 准备练习仓库（Windows PowerShell）
+
+在 `learn-claude-code` 根目录执行下面的命令。运行时的工作目录是**启动命令所在目录**；这里单独创建一个小仓库，任务文件和示例代码都会留在其中。每做一个新例子，先执行 `Set-Location $projectRoot` 回到项目根目录，再重新执行准备命令，得到新的 `$demoDir`。
+
+```powershell
+$projectRoot = (Get-Location).Path
+$demoDir = Join-Path $env:TEMP ("s13-demo-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+New-Item -ItemType Directory -Path $demoDir | Out-Null
+Set-Location $demoDir
+git init -q -b main
+git config user.name "Agent Teams Demo"
+git config user.email "demo@example.invalid"
+"# Agent Teams demo" | Set-Content -Encoding UTF8 README.md
+git add README.md
+git commit -q -m "demo baseline"
+& (Join-Path $projectRoot '.venv\Scripts\python.exe') (Join-Path $projectRoot 's13_agent_teams\code.py')
 ```
 
-输入一个自然需求：
+出现 `s13 >>` 后输入下面的示例提示词。Lead 应先提出团队方案；再输入 `开始吧`，让它创建任务和启动队友。模型生成的任务 ID、队友名称和事件顺序可能不同，重点看任务状态与消息类型。
+
+### 例 1：一个队友如何工作、空闲和退出
 
 ```text
-把后端重构拆到共享任务板，在依赖允许时并行完成配置、认证和测试。
-认证任务使用 worktree，保持现有接口，并在最后汇总结果。
+这是团队运行时演示，请不要由 Lead 直接写文件。
+先提出一个只包含一名队友 alice 的方案，等我确认后再启动。
+确认后创建一个任务并分配给 alice：新建 greeting.py，
+实现 greet(name)，让 greet("Ada") 返回 "Hello, Ada!"。
+请让 alice 调用 complete_task 完成任务。收到 result 和
+idle_notification 后，向我汇报，并调用 request_shutdown 关闭 alice。
 ```
 
-Lead 提出团队方案后回复：
+输入 `开始吧` 后，观察终端中的 `[create]`、`[claim]`、`[complete]`、`[bus] alice -> lead: (result)`、`(idle_notification)` 和 `[wake: ...]`。`result` 表示队友报告了什么；`idle_notification` 表示队友这一轮已停下来等待。任务是否完成要以 `.tasks` 中的 `completed` 为准。`request_shutdown` 关闭的是 alice 的后台执行循环，不是电脑。
+
+队友退出后输入 `q`，在同一 PowerShell 窗口检查结果：
+
+```powershell
+Get-ChildItem .tasks -Filter 'task_*.json' | ForEach-Object {
+    Get-Content $_.FullName -Raw | ConvertFrom-Json |
+        Select-Object id, subject, status, owner, blockedBy, worktree
+}
+& (Join-Path $projectRoot '.venv\Scripts\python.exe') -c "from greeting import greet; assert greet('Ada') == 'Hello, Ada!'; print('OK')"
+```
+
+### 例 2：两个队友与自动领取后续任务
+
+重新执行“准备练习仓库”的命令，然后输入：
 
 ```text
-开始吧
+这是团队运行时演示，请不要由 Lead 直接写文件。
+先提出 alice 和 bob 两名队友的方案，等我确认。确认后依次执行：
+1. 用 create_task 创建三个任务：A 新建 math_ops.py 并实现 add(a, b)；
+   B 新建 text_ops.py 并实现 normalize(text)，返回去除两端空白后的小写文本；
+   C 新建 test_ops.py，用 unittest 测试前两个函数。
+2. 三个任务都创建后，用 update_task 将 C 的 blockedBy 设为 A 和 B 的实际 task ID。
+3. 将 A 分配给 alice，B 分配给 bob；不要直接分配或认领 C，
+   让空闲队友在 A、B 完成后自动领取 C。
+4. 所有任务完成后汇报结果，并请求关闭队友。
 ```
 
-观察 `.tasks/` 如何从 `pending` 进入 `in_progress` 和 `completed`，`.mailboxes/` 如何投递 `result` 与 `idle_notification`，以及 `.worktrees/` 是否只为绑定的任务创建。还可以检查直接消息是否先于任务板扫描，以及 `complete_task` 失败后队友的工作目录是否保持不变。
+输入 `开始吧` 后，留意 C 起初为 `pending` 且带有两个 `blockedBy` ID。A、B 都变为 `completed` 后，C 才成为 ready task；空闲队友会扫描并尝试认领，终端会出现 `[idle] ... claimed ...`。认领在文件锁内执行，因此同一任务只能由一名队友获得。结束后输入 `q`，运行：
+
+```powershell
+& (Join-Path $projectRoot '.venv\Scripts\python.exe') -m unittest discover -v
+Get-ChildItem .tasks -Filter 'task_*.json' | ForEach-Object {
+    Get-Content $_.FullName -Raw | ConvertFrom-Json |
+        Select-Object subject, status, owner, blockedBy
+}
+```
+
+### 例 3：计划审批与独立工作目录
+
+再次准备一个新练习仓库，然后输入：
+
+```text
+这是团队运行时演示，请不要由 Lead 直接写文件。
+先提出一名队友 alice 的方案，等我确认。确认后先 create_task：
+在独立工作目录新建 isolation.txt，内容为 hello from worktree。
+再为该任务调用 create_worktree，名称为 isolated；之后用该 task_id
+启动 alice，并设置 require_plan=true。收到 alice 提交的计划后，
+先向我显示计划并等待我回复“批准计划”，不要提前调用 review_plan。
+计划获批后让 alice 完成任务，最后请求关闭 alice。
+```
+
+先输入 `开始吧`。队友提交计划时会出现 `plan_approval_request` 和一个 `req_...`；此时队友的 `bash`、`write_file` 和 `edit_file` 被计划闸门拦住。看到 Lead 展示计划后输入 `批准计划`，观察 `review_plan` 发出 `plan_approval_response`。这里的 `req_...` 用来匹配本次审批，和任务的 `task_...` ID 不是一回事。
+
+队友完成并退出后输入 `q`，检查两个目录：
+
+```powershell
+Get-Content .worktrees\isolated\isolation.txt
+Test-Path .\isolation.txt
+git worktree list
+```
+
+预期文件出现在 `.worktrees\isolated`，而 `Test-Path .\isolation.txt` 返回 `False`。Worktree 只分开工作目录和 Git 分支，不会自动把修改合并回主目录。Lead 的 `.mailboxes` 消息会被运行时读取并删除；查看通信过程以终端的 `[bus]` 和 `[wake]` 日志为准。
 
 ---
 

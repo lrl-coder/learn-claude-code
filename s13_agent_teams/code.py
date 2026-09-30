@@ -20,13 +20,13 @@ Need: pip install openai python-dotenv + .env with OPENAI_API_KEY
     .worktrees/   optional task-bound working directories
 """
 
-import fcntl
+import errno
 import json
 import os
+import queue
 import random
 import re
 import secrets
-import select
 import subprocess
 import sys
 import threading
@@ -34,6 +34,11 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 try:
     import readline
@@ -67,6 +72,29 @@ teammate_assignments: dict[str, dict[str, object]] = {}
 assignment_versions: dict[str, int] = {}
 
 
+def lock_task_file(handle):
+    if os.name == "nt":
+        while True:
+            handle.seek(0)
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                return
+            except OSError as exc:
+                if exc.errno not in {errno.EACCES, errno.EAGAIN}:
+                    raise
+                time.sleep(0.05)
+    else:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+
+
+def unlock_task_file(handle):
+    if os.name == "nt":
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 @contextmanager
 def task_store_lock():
     """Serialize task mutations across threads and host processes."""
@@ -75,7 +103,11 @@ def task_store_lock():
         if depth == 0:
             TASKS_DIR.mkdir(parents=True, exist_ok=True)
             handle = TASK_LOCK_PATH.open("a+", encoding="utf-8")
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                lock_task_file(handle)
+            except BaseException:
+                handle.close()
+                raise
             _task_store_state.handle = handle
         _task_store_state.depth = depth + 1
         try:
@@ -84,9 +116,11 @@ def task_store_lock():
             _task_store_state.depth -= 1
             if _task_store_state.depth == 0:
                 handle = _task_store_state.handle
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-                handle.close()
-                del _task_store_state.handle
+                try:
+                    unlock_task_file(handle)
+                finally:
+                    handle.close()
+                    del _task_store_state.handle
 
 
 def advance_assignment_version(owner: str):
@@ -1629,7 +1663,8 @@ TEAM_TOOLS = [
          "type": "object",
          "properties": {
              "name": {"type": "string",
-                      "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+                      "description": "1-64 letters, digits, dots, underscores, or dashes; no '..'.",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
                       "maxLength": 64},
              "task_id": {"type": "string"}},
          "required": ["name", "task_id"],
@@ -1828,7 +1863,15 @@ def print_last_assistant_message(history: list):
             print(block.get("text", ""))
 
 
-def wait_for_cli_event() -> tuple[str, str | None]:
+def read_cli_input(lines: queue.Queue[str]):
+    while True:
+        line = sys.stdin.readline()
+        lines.put(line)
+        if line == "":
+            return
+
+
+def wait_for_cli_event(lines: queue.Queue[str]) -> tuple[str, str | None]:
     prompt_visible = False
     while True:
         if BUS.peek("lead"):
@@ -1838,12 +1881,13 @@ def wait_for_cli_event() -> tuple[str, str | None]:
         if not prompt_visible:
             print("s13 >> ", end="", flush=True)
             prompt_visible = True
-        readable, _, _ = select.select([sys.stdin], [], [], 0.25)
-        if readable:
-            line = sys.stdin.readline()
-            if line == "":
-                return "quit", None
-            return "user", line.rstrip("\n")
+        try:
+            line = lines.get(timeout=0.25)
+        except queue.Empty:
+            continue
+        if line == "":
+            return "quit", None
+        return "user", line.rstrip("\n")
 
 
 if __name__ == "__main__":
@@ -1851,9 +1895,11 @@ if __name__ == "__main__":
     print("Enter a question, press Enter to send. Type q to quit.\n")
     history = []
     had_teammates = False
+    input_lines: queue.Queue[str] = queue.Queue()
+    threading.Thread(target=read_cli_input, args=(input_lines,), daemon=True).start()
 
     while True:
-        kind, payload = wait_for_cli_event()
+        kind, payload = wait_for_cli_event(input_lines)
         if kind == "quit":
             break
         if kind == "user":

@@ -41,6 +41,7 @@ except ImportError:
     pass
 
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bash_compat import bash_argv
 from openai_compat import OpenAICompat
@@ -138,8 +139,7 @@ class TaskStore:
             pending.extend(self.load(current).blockedBy)
         return False
 
-    def update_dependencies(self, task_id: str,
-                            add_blocked_by: list[str]) -> Task:
+    def update_dependencies(self, task_id: str, add_blocked_by: list[str]) -> Task:
         if not isinstance(add_blocked_by, list):
             raise ValueError("addBlockedBy must be a list of task IDs")
 
@@ -164,7 +164,8 @@ class TaskStore:
                 )
 
         task.blockedBy.extend(
-            dependency for dependency in dependencies
+            dependency
+            for dependency in dependencies
             if dependency not in task.blockedBy
         )
         self.save(task)
@@ -189,8 +190,7 @@ class TaskStore:
         if not self.directory.exists():
             return []
         root = self._root()
-        return [self.load(path.stem)
-                for path in sorted(root.glob("task_*.json"))]
+        return [self.load(path.stem) for path in sorted(root.glob("task_*.json"))]
 
 
 TASKS = TaskStore(TASKS_DIR)
@@ -260,11 +260,14 @@ def complete_task(task_id: str, owner: str = "agent") -> str:
     }
     task.status = "completed"
     TASKS.save(task)
-    unblocked = [candidate.subject for candidate in list_tasks()
-                 if candidate.status == "pending"
-                 and candidate.blockedBy
-                 and candidate.id not in ready_before
-                 and can_start(candidate.id)]
+    unblocked = [
+        candidate.subject
+        for candidate in list_tasks()
+        if candidate.status == "pending"
+        and candidate.blockedBy
+        and candidate.id not in ready_before
+        and can_start(candidate.id)
+    ]
     print(f"  [complete] {task.subject}")
     message = f"Completed {task.id} ({task.subject})"
     if unblocked:
@@ -275,6 +278,7 @@ def complete_task(task_id: str, owner: str = "agent") -> str:
 
 # -- From s04: tool implementations --
 
+
 def run_bash(command: str) -> str:
     try:
         result = subprocess.run(
@@ -283,7 +287,8 @@ def run_bash(command: str) -> str:
             stdin=subprocess.DEVNULL,
             cwd=WORKDIR,
             capture_output=True,
-            text=True, errors="replace",
+            text=True,
+            errors="replace",
             timeout=120,
         )
         output = (result.stdout + result.stderr).strip()
@@ -326,11 +331,13 @@ def run_edit(path: str, old_text: str, new_text: str) -> str:
 
 def run_glob(pattern: str) -> str:
     try:
-        matches = sorted({
-            match
-            for match in glob.glob(pattern, root_dir=WORKDIR, recursive=True)
-            if (WORKDIR / match).resolve().is_relative_to(WORKDIR)
-        })
+        matches = sorted(
+            {
+                match
+                for match in glob.glob(pattern, root_dir=WORKDIR, recursive=True)
+                if (WORKDIR / match).resolve().is_relative_to(WORKDIR)
+            }
+        )
         shown = matches[:200]
         if len(matches) > 200:
             shown.append("... (more matches omitted; narrow the pattern)")
@@ -364,8 +371,7 @@ def run_list_tasks() -> str:
             "completed": "[x]",
         }.get(task.status, "[?]")
         dependencies = (
-            f" (blockedBy: {', '.join(task.blockedBy)})"
-            if task.blockedBy else ""
+            f" (blockedBy: {', '.join(task.blockedBy)})" if task.blockedBy else ""
         )
         owner = f" [{task.owner}]" if task.owner else ""
         lines.append(
@@ -388,28 +394,117 @@ def run_complete_task(task_id: str) -> str:
 
 
 TOOLS = [
-    {"name": "bash", "description": "Run a shell command.",
-     "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}},
-    {"name": "read_file", "description": "Read file contents.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["path"]}},
-    {"name": "write_file", "description": "Write content to a file.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}},
-    {"name": "edit_file", "description": "Replace exact text in a file once.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}}, "required": ["path", "old_text", "new_text"]}},
-    {"name": "glob", "description": "Find files matching a glob pattern; ** matches recursively.",
-     "input_schema": {"type": "object", "properties": {"pattern": {"type": "string"}}, "required": ["pattern"]}},
-    {"name": "create_task", "description": "Create a task and return its runtime-generated ID.",
-     "input_schema": {"type": "object", "properties": {"subject": {"type": "string"}, "description": {"type": "string"}}, "required": ["subject"], "additionalProperties": False}},
-    {"name": "update_task", "description": "Add dependencies using IDs returned by create_task.",
-     "input_schema": {"type": "object", "properties": {"task_id": {"type": "string", "pattern": "^task_[0-9a-f]{8}$"}, "addBlockedBy": {"type": "array", "items": {"type": "string", "pattern": "^task_[0-9a-f]{8}$"}, "minItems": 1}}, "required": ["task_id", "addBlockedBy"], "additionalProperties": False}},
-    {"name": "list_tasks", "description": "List tasks with status, owner, and dependencies.",
-     "input_schema": {"type": "object", "properties": {}}},
-    {"name": "get_task", "description": "Get a task by ID.",
-     "input_schema": {"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]}},
-    {"name": "claim_task", "description": "Claim a pending task whose dependencies are complete.",
-     "input_schema": {"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]}},
-    {"name": "complete_task", "description": "Complete the task claimed by this agent.",
-     "input_schema": {"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]}},
+    {
+        "name": "bash",
+        "description": "Run a shell command.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"command": {"type": "string"}},
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "read_file",
+        "description": "Read file contents.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "limit": {"type": "integer"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "write_file",
+        "description": "Write content to a file.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "edit_file",
+        "description": "Replace exact text in a file once.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "old_text": {"type": "string"},
+                "new_text": {"type": "string"},
+            },
+            "required": ["path", "old_text", "new_text"],
+        },
+    },
+    {
+        "name": "glob",
+        "description": "Find files matching a glob pattern; ** matches recursively.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"pattern": {"type": "string"}},
+            "required": ["pattern"],
+        },
+    },
+    {
+        "name": "create_task",
+        "description": "Create a task and return its runtime-generated ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "subject": {"type": "string"},
+                "description": {"type": "string"},
+            },
+            "required": ["subject"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "update_task",
+        "description": "Add dependencies using IDs returned by create_task.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "pattern": "^task_[0-9a-f]{8}$"},
+                "addBlockedBy": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": "^task_[0-9a-f]{8}$"},
+                    "minItems": 1,
+                },
+            },
+            "required": ["task_id", "addBlockedBy"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "list_tasks",
+        "description": "List tasks with status, owner, and dependencies.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_task",
+        "description": "Get a task by ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"task_id": {"type": "string"}},
+            "required": ["task_id"],
+        },
+    },
+    {
+        "name": "claim_task",
+        "description": "Claim a pending task whose dependencies are complete.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"task_id": {"type": "string"}},
+            "required": ["task_id"],
+        },
+    },
+    {
+        "name": "complete_task",
+        "description": "Complete the task claimed by this agent.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"task_id": {"type": "string"}},
+            "required": ["task_id"],
+        },
+    },
 ]
 
 TOOL_HANDLERS = {
@@ -507,9 +602,7 @@ def summary_hook(messages: list):
         1
         for message in messages
         for block in (
-            message.get("content")
-            if isinstance(message.get("content"), list)
-            else []
+            message.get("content") if isinstance(message.get("content"), list) else []
         )
         if isinstance(block, dict) and block.get("type") == "tool_result"
     )
@@ -541,6 +634,7 @@ def execute_tool(block) -> str:
 
 # -- Agent loop --
 
+
 def agent_loop(messages: list):
     while True:
         response = client.messages.create(
@@ -552,9 +646,7 @@ def agent_loop(messages: list):
         )
         messages.append({"role": "assistant", "content": response.content})
 
-        tool_calls = [
-            block for block in response.content if block.type == "tool_use"
-        ]
+        tool_calls = [block for block in response.content if block.type == "tool_use"]
         if not tool_calls:
             force = trigger_hooks("Stop", messages)
             if force:
@@ -565,11 +657,13 @@ def agent_loop(messages: list):
         results = []
         for block in tool_calls:
             output = execute_tool(block)
-            results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": output,
-            })
+            results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": output,
+                }
+            )
         messages.append({"role": "user", "content": results})
 
 

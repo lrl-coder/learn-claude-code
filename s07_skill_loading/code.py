@@ -28,14 +28,16 @@ import yaml
 
 try:
     import readline
-    readline.parse_and_bind('set bind-tty-special-chars off')
-    readline.parse_and_bind('set input-meta on')
-    readline.parse_and_bind('set output-meta on')
-    readline.parse_and_bind('set convert-meta off')
+
+    readline.parse_and_bind("set bind-tty-special-chars off")
+    readline.parse_and_bind("set input-meta on")
+    readline.parse_and_bind("set output-meta on")
+    readline.parse_and_bind("set convert-meta off")
 except ImportError:
     pass
 
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bash_compat import bash_argv
 from openai_compat import OpenAICompat
@@ -50,6 +52,7 @@ MODEL = os.environ["MODEL_ID"]
 
 # -- Skill catalog --
 
+
 class SkillLoader:
     def __init__(self, skills_dir: Path):
         self.skills_dir = skills_dir
@@ -63,15 +66,18 @@ class SkillLoader:
             return {}, text
 
         closing_index = next(
-            (index for index, line in enumerate(lines[1:], start=1)
-             if line.rstrip("\r\n") == "---"),
+            (
+                index
+                for index, line in enumerate(lines[1:], start=1)
+                if line.rstrip("\r\n") == "---"
+            ),
             None,
         )
         if closing_index is None:
             return {}, text
 
         frontmatter = "".join(lines[1:closing_index])
-        body = "".join(lines[closing_index + 1:]).strip()
+        body = "".join(lines[closing_index + 1 :]).strip()
         try:
             metadata = yaml.safe_load(frontmatter) or {}
         except yaml.YAMLError:
@@ -87,8 +93,9 @@ class SkillLoader:
 
         skills_root = self.skills_dir.resolve()
         for manifest in sorted(self.skills_dir.glob("*/SKILL.md")):
-            if (not manifest.is_file()
-                    or not manifest.resolve().is_relative_to(skills_root)):
+            if not manifest.is_file() or not manifest.resolve().is_relative_to(
+                skills_root
+            ):
                 continue
             content = manifest.read_text(encoding="utf-8")
             metadata, body = self.parse_frontmatter(content)
@@ -96,8 +103,9 @@ class SkillLoader:
             name = raw_name.strip() if isinstance(raw_name, str) else ""
             name = name or manifest.parent.name
             raw_description = metadata.get("description")
-            description = (raw_description.strip()
-                           if isinstance(raw_description, str) else "")
+            description = (
+                raw_description.strip() if isinstance(raw_description, str) else ""
+            )
             description = description or body.split("\n", 1)[0]
             description = " ".join(str(description).lstrip("# ").split())
             self.skills[name] = {
@@ -135,16 +143,22 @@ def build_system_prompt() -> str:
 
 
 SYSTEM = build_system_prompt()
-
+print(f'\033[90m[HOOK] System prompt:\033[0m\n{SYSTEM}\n')
 
 # -- Tools --
+
 
 def run_bash(command: str) -> str:
     try:
         result = subprocess.run(
-            bash_argv(command), shell=False, stdin=subprocess.DEVNULL,
+            bash_argv(command),
+            shell=False,
+            stdin=subprocess.DEVNULL,
             cwd=WORKDIR,
-            capture_output=True, text=True, errors="replace", timeout=120,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=120,
         )
         output = (result.stdout + result.stderr).strip()
         return output[:50000] if output else "(no output)"
@@ -186,12 +200,15 @@ def run_edit(path: str, old_text: str, new_text: str) -> str:
 
 def run_glob(pattern: str) -> str:
     import glob
+
     try:
-        matches = sorted({
-            match for match in glob.glob(
-                pattern, root_dir=WORKDIR, recursive=True)
-            if (WORKDIR / match).resolve().is_relative_to(WORKDIR)
-        })
+        matches = sorted(
+            {
+                match
+                for match in glob.glob(pattern, root_dir=WORKDIR, recursive=True)
+                if (WORKDIR / match).resolve().is_relative_to(WORKDIR)
+            }
+        )
         shown = matches[:200]
         if len(matches) > 200:
             shown.append("... (more matches omitted; narrow the pattern)")
@@ -201,18 +218,64 @@ def run_glob(pattern: str) -> str:
 
 
 TOOLS = [
-    {"name": "bash", "description": "Run a shell command.",
-     "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}},
-    {"name": "read_file", "description": "Read file contents.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["path"]}},
-    {"name": "write_file", "description": "Write content to a file.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}},
-    {"name": "edit_file", "description": "Replace exact text in a file once.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}}, "required": ["path", "old_text", "new_text"]}},
-    {"name": "glob", "description": "Find files matching a glob pattern; ** matches recursively.",
-     "input_schema": {"type": "object", "properties": {"pattern": {"type": "string"}}, "required": ["pattern"]}},
-    {"name": "load_skill", "description": "Load the full SKILL.md content by skill name.",
-     "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
+    {
+        "name": "bash",
+        "description": "Run a shell command.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"command": {"type": "string"}},
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "read_file",
+        "description": "Read file contents.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "limit": {"type": "integer"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "write_file",
+        "description": "Write content to a file.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "edit_file",
+        "description": "Replace exact text in a file once.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "old_text": {"type": "string"},
+                "new_text": {"type": "string"},
+            },
+            "required": ["path", "old_text", "new_text"],
+        },
+    },
+    {
+        "name": "glob",
+        "description": "Find files matching a glob pattern; ** matches recursively.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"pattern": {"type": "string"}},
+            "required": ["pattern"],
+        },
+    },
+    {
+        "name": "load_skill",
+        "description": "Load the full SKILL.md content by skill name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    },
 ]
 
 TOOL_HANDLERS = {
@@ -291,7 +354,9 @@ def log_hook(block):
 def large_output_hook(block, output):
     """PostToolUse: warn on large output."""
     if len(str(output)) > 100000:
-        print(f"\033[33m[HOOK] Large output from {block.name}: {len(str(output))} chars\033[0m")
+        print(
+            f"\033[33m[HOOK] Large output from {block.name}: {len(str(output))} chars\033[0m"
+        )
     return None
 
 
@@ -307,9 +372,7 @@ def summary_hook(messages: list):
         1
         for message in messages
         for block in (
-            message.get("content")
-            if isinstance(message.get("content"), list)
-            else []
+            message.get("content") if isinstance(message.get("content"), list) else []
         )
         if isinstance(block, dict) and block.get("type") == "tool_result"
     )
@@ -350,9 +413,7 @@ def agent_loop(messages: list):
         )
         messages.append({"role": "assistant", "content": response.content})
 
-        tool_calls = [
-            block for block in response.content if block.type == "tool_use"
-        ]
+        tool_calls = [block for block in response.content if block.type == "tool_use"]
         if not tool_calls:
             force = trigger_hooks("Stop", messages)
             if force:
@@ -363,11 +424,13 @@ def agent_loop(messages: list):
         results = []
         for block in tool_calls:
             output = execute_tool(block)
-            results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": output,
-            })
+            results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": output,
+                }
+            )
         messages.append({"role": "user", "content": results})
 
 
