@@ -63,6 +63,121 @@ def test_workflow_runtime_resumes_from_journal(tmp_path: Path) -> None:
     assert "status=completed  agents=0  tokens=0" in resumed
 
 
+def test_explicit_review_query_runs_workflow_with_file_diff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workflow = load_lesson(
+        "workflow_review_query_test", ROOT / "s16_workflow_runtime" / "code.py"
+    )
+    monkeypatch.setattr(workflow, "STORE", tmp_path / "runtime")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    source = repo / "example.py"
+    source.write_bytes(b"value = 1\x00\n")
+    subprocess.run(["git", "add", "example.py"], cwd=repo, check=True)
+    subprocess.run([
+        "git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+        "commit", "-qm", "initial",
+    ], cwd=repo, check=True)
+    with pytest.raises(workflow.WorkflowInputError, match="no Git changes"):
+        workflow.review_changes_for_path("example.py", repo)
+    source.write_text("value = 2\n", encoding="utf-8")
+
+    output = workflow.run_review_query(f"检查代码修改: {source}", repo)
+
+    assert output.summary.startswith("Workflow wf_review-changes_")
+    assert workflow.run_review_query("检查代码修改: missing.py", repo).summary == (
+        "Error: file not found: missing.py"
+    )
+    assert workflow.run_review_query("ordinary question", repo) is None
+    journals = list((tmp_path / "runtime").glob("*.journal.jsonl"))
+    assert len(journals) == 1
+    run_id = journals[0].name.removesuffix(".journal.jsonl")
+    snapshot = json.loads((tmp_path / "runtime" / f"{run_id}.json").read_text())
+    assert "+value = 2" in snapshot["args"]["changes"]
+    assert "Binary files" not in snapshot["args"]["changes"]
+    output_path = tmp_path / "runtime" / f"{run_id}.output.json"
+    assert output_path.is_file()
+    assert f"Output: {output_path}" in output.summary
+
+
+def test_review_query_gets_a_final_model_answer_without_more_tools() -> None:
+    workflow = load_lesson(
+        "workflow_review_answer_test", ROOT / "s16_workflow_runtime" / "code.py"
+    )
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return types.SimpleNamespace(content=[
+            types.SimpleNamespace(type="text", text="发现一处需要修复的问题。")
+        ])
+
+    host = types.SimpleNamespace(
+        MODEL="test-model",
+        client=types.SimpleNamespace(messages=types.SimpleNamespace(create=create)),
+    )
+    review = workflow.ReviewQueryResult(
+        "Workflow wf_test: 1 confirmed finding\n[high] correctness: bug",
+        "@@ -1 +1 @@\n-old\n+new",
+    )
+    answer = workflow.answer_review_query(host, "检查代码修改: example.py", review)
+
+    assert answer == "发现一处需要修复的问题。"
+    assert len(calls) == 1
+    assert "tools" not in calls[0]
+    assert "Workflow wf_test" in calls[0]["messages"][0]["content"]
+    assert "+new" in calls[0]["messages"][0]["content"]
+    assert workflow.answer_review_query(
+        host, "检查代码修改: missing.py", workflow.ReviewQueryResult("Error: file not found")
+    ) == "Error: file not found"
+    assert len(calls) == 1
+
+
+def test_workflow_runtime_replays_upstream_result_after_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workflow = load_lesson(
+        "workflow_partial_resume_test", ROOT / "s16_workflow_runtime" / "code.py"
+    )
+    monkeypatch.setattr(workflow, "STORE", tmp_path)
+    calls = []
+
+    class InterruptedRunner:
+        def run(self, prompt, schema=None, label=None):
+            calls.append(prompt)
+            if label == "seed":
+                return workflow.RunnerOutput({"value": "saved output"}, 1)
+            if len(calls) == 2:
+                raise RuntimeError("interrupted")
+            return workflow.RunnerOutput("finished", 1)
+
+    monkeypatch.setattr(workflow, "RUNNER_FACTORY", InterruptedRunner)
+    schema = {
+        "type": "object",
+        "required": ["value"],
+        "properties": {"value": {"type": "string"}},
+    }
+
+    async def script(ctx, _args):
+        first = await ctx.agent("seed prompt", schema=schema, label="seed")
+        return await ctx.agent(f"next: {first['value']}", label="next")
+
+    meta = {"name": "partial-resume", "description": "test interrupted replay"}
+    first = asyncio.run(workflow.WorkflowTool().call(meta, script))
+    assert first["task"].status == "failed"
+    assert first["result"] == {"error": "interrupted"}
+
+    resumed = asyncio.run(workflow.WorkflowTool().call(
+        meta, script, resume_from_run_id=first["task"].run_id
+    ))
+    assert resumed["task"].status == "completed"
+    assert resumed["result"] == "finished"
+    assert resumed["task"].usage == {"agents": 1, "tokens": 1}
+    assert calls == ["seed prompt", "next: saved output", "next: saved output"]
+
+
 def test_workflow_runtime_rejects_unsafe_artifact_names() -> None:
     workflow = load_lesson(
         "workflow_name_test", ROOT / "s16_workflow_runtime" / "code.py"
@@ -477,6 +592,10 @@ def test_workflow_default_entry_extends_the_real_s15_host(
     assert names[:-1] == [tool["name"] for tool in host.BUILTIN_TOOLS]
     assert "update_task" in names
     assert names[-1] == "Workflow"
+    worktree_tool = next(tool for tool in tools if tool["name"] == "create_worktree")
+    name_pattern = worktree_tool["input_schema"]["properties"]["name"]["pattern"]
+    assert "(?" not in name_pattern
+    assert host.validate_worktree_name("a..b") is not None
     assert handlers["Workflow"] is workflow.run_workflow_sync
     assert handlers["Workflow"](name="missing") == (
         "Error: unknown workflow 'missing'"

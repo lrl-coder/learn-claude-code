@@ -172,6 +172,8 @@ class WorkflowJournal:
 
 Calling the workflow again with `resume_from_run_id` reruns the script, but every `agent()` computes a deterministic semantic key. If that key is present in the journal, it returns the cached result without executing again. Every unchanged call hits the cache; only a changed call and the downstream steps that depend on it actually rerun.
 
+Resume replays from the beginning with the saved arguments. A cached upstream result therefore produces the same downstream prompt, even if the original model response was nondeterministic. The script must also build calls deterministically from its arguments and prior journaled results. If it reads changing external state, that state needs to be saved as an argument or journaled separately. A changed prompt or schema is a new request and must run again; matching only a label would risk returning stale output.
+
 The key detail is that keys cannot depend on concurrency order. Agents in `parallel` and `pipeline` finish in nondeterministic order. If "the nth completion" became the key, cache entries would map to the wrong calls on the next run. A key therefore uses a stable hash of call content, including type, label, prompt, and schema, rather than a shared counter:
 
 ```python
@@ -237,6 +239,9 @@ python s16_workflow_runtime/code.py resume   # Resume by the last runId; every a
 ```
 
 In the default command, ask the model to read the changes, place that text in `args.changes`, and run the saved `review-changes` workflow. Both the main model and workflow agents use the real API. The `demo` command uses fixed runner data so lifecycle and resume behavior can be observed repeatedly. A resumed demo reports `agents=0 tokens=0` when every call hits the cache.
+
+For a direct file review, enter `检查代码修改: <path>` or `检查代码: <path>`. The CLI reads that file's Git diff (including staged changes) and calls `review-changes` directly, without a model tool-selection turn. After the workflow finishes, a final model call receives the diff and workflow findings and answers the user without tools. An untracked file is reviewed as new content. If the path has no Git changes, the CLI reports that instead of running agents with empty change context.
+The run event and CLI summary print the absolute path of the saved `<runId>.output.json` file. Text files are diffed with `git diff --text` so a NUL byte in an older revision does not reduce the review input to a binary-file notice.
 
 ## Next
 
